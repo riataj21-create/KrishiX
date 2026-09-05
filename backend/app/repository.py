@@ -7,7 +7,7 @@ from typing import Optional, List
 
 from app.models import (
     User, FarmerProfile, Commodity, Market, MarketPrice,
-    SavedMarket, SavedCommodity
+    SavedMarket, SavedCommodity, Buyer
 )
 from app.auth import hash_password
 
@@ -275,3 +275,51 @@ class SavedCommodityRepository:
             db.commit()
             return True
         return False
+
+
+class BuyerRepository:
+    """Buyer database operations."""
+
+    @staticmethod
+    def get_all(
+        db: Session,
+        commodity_name: Optional[str] = None,
+        state: Optional[str] = None,
+        buyer_type: Optional[str] = None,
+        min_quantity: Optional[float] = None,
+        limit: int = 20,
+        offset: int = 0,
+    ):
+        """
+        List buyers with optional filters.
+        commodity_name match is case-insensitive contains search.
+        """
+        query = db.query(Buyer)
+
+        if commodity_name:
+            query = query.filter(
+                Buyer.commodity_name.ilike(f"%{commodity_name}%")
+            )
+        if state:
+            query = query.filter(Buyer.state == state)
+        if buyer_type:
+            query = query.filter(Buyer.buyer_type == buyer_type)
+        if min_quantity is not None:
+            # Buyer's max_quantity_quintal must cover the farmer's minimum
+            query = query.filter(
+                Buyer.max_quantity_quintal >= min_quantity
+            )
+
+        total = query.count()
+        items = (
+            query
+            .order_by(desc(Buyer.is_verified), desc(Buyer.rating))
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+        return total, items
+
+    @staticmethod
+    def get_by_id(db: Session, buyer_id: UUID) -> Optional[Buyer]:
+        return db.query(Buyer).filter(Buyer.id == buyer_id).first()

@@ -2,16 +2,35 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime, timezone
 
 from app.database import get_db
 from app.schemas import (
-    MarketPriceWithDetails, PaginatedResponse, PriceComparisonResponse,
+    PaginatedResponse, PriceComparisonResponse,
     PriceComparisonItem, PriceTrendResponse, PriceTrendItem
 )
 from app.repository import MarketPriceRepository, MarketRepository, CommodityRepository
 
 router = APIRouter()
+
+
+def _freshness_label(price_date: date, source: str) -> str:
+    """
+    Assign a data freshness label to a price record.
+    Never calls data 'LIVE' unless the source actually supports it.
+    """
+    src = source.lower()
+    if "sample" in src or "demo" in src:
+        return "DEMO"
+    days_old = (datetime.now(timezone.utc).date() - price_date).days
+    if days_old == 0:
+        return "LATEST_AVAILABLE"
+    elif days_old <= 3:
+        return "RECENT"
+    elif days_old <= 14:
+        return "STALE"
+    else:
+        return f"STALE ({days_old}d old)"
 
 
 @router.get("/market-prices", response_model=PaginatedResponse)
@@ -25,10 +44,17 @@ def get_market_prices(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
 ):
-    """Get market prices with filtering."""
+    """
+    Get market prices with filtering.
+    Every price record includes:
+    - price_date: the date the price was observed
+    - data_freshness: DEMO | LATEST_AVAILABLE | RECENT | STALE
+    - source: where the price came from
+    Data is never labelled 'LIVE' unless the source supports it.
+    """
     market_id_uuid = UUID(market_id) if market_id else None
     commodity_id_uuid = UUID(commodity_id) if commodity_id else None
-    
+
     total, items = MarketPriceRepository.get_latest_prices(
         db,
         state=state,
@@ -39,8 +65,7 @@ def get_market_prices(
         limit=limit,
         offset=offset
     )
-    
-    # Enrich with market and commodity names
+
     enriched_items = []
     for item in items:
         enriched = {
@@ -57,11 +82,13 @@ def get_market_prices(
             "modal_price": float(item.modal_price) if item.modal_price else None,
             "quantity_traded": float(item.quantity_traded) if item.quantity_traded else None,
             "source": item.source,
+            # Freshness metadata — honest label, never 'LIVE' for batch data
+            "data_freshness": _freshness_label(item.price_date, item.source),
             "last_updated": item.last_updated.isoformat(),
-            "created_at": item.created_at.isoformat()
+            "created_at": item.created_at.isoformat(),
         }
         enriched_items.append(enriched)
-    
+
     return {"total": total, "items": enriched_items}
 
 
@@ -73,18 +100,21 @@ def compare_prices(
     date_filter: date = Query(None, alias="date"),
     db: Session = Depends(get_db)
 ):
-    """Compare prices for a commodity across multiple markets."""
+    """
+    Compare prices for a commodity across multiple markets.
+    Uses latest available date if no date given — never assumes today's data exists.
+    """
     commodity = CommodityRepository.get_by_id(db, commodity_id)
     if not commodity:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commodity not found")
-    
+
     prices = MarketPriceRepository.get_commodity_prices_by_date(
         db,
         commodity_id=commodity_id,
         price_date=date_filter,
         state=state
     )
-    
+
     comparison_items = []
     for price in prices:
         item = PriceComparisonItem(
@@ -98,11 +128,14 @@ def compare_prices(
             quantity_traded=price.quantity_traded
         )
         comparison_items.append(item)
-    
+
+    # Use the actual date from data, not date.today()
+    actual_date = str(prices[0].price_date) if prices else str(date_filter or date.today())
+
     return PriceComparisonResponse(
         commodity_id=commodity_id,
         commodity_name=commodity.name,
-        date=str(date_filter or date.today()),
+        date=actual_date,
         prices=comparison_items
     )
 
@@ -114,17 +147,21 @@ def get_price_history(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db)
 ):
-    """Get historical price trend for a market-commodity pair."""
+    """
+    Get historical price trend for a market-commodity pair.
+    Anchors to the latest available date in the database —
+    works correctly with sample data regardless of when it was loaded.
+    """
     market = MarketRepository.get_by_id(db, market_id)
     if not market:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Market not found")
-    
+
     commodity = CommodityRepository.get_by_id(db, commodity_id)
     if not commodity:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commodity not found")
-    
+
     history = MarketPriceRepository.get_price_history(db, market_id, commodity_id, days)
-    
+
     trend_items = [
         PriceTrendItem(
             date=str(price.price_date),
@@ -134,7 +171,7 @@ def get_price_history(
         )
         for price in history
     ]
-    
+
     return PriceTrendResponse(
         market_id=market_id,
         market_name=market.name,

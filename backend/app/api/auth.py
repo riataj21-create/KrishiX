@@ -21,8 +21,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered"
         )
     
-    # Create new user
-    new_user = UserRepository.create(db, email=user_data.email, password=user_data.password)
+    # Create new user with role
+    new_user = UserRepository.create(db, email=user_data.email, password=user_data.password, role=user_data.role)
     return new_user
 
 

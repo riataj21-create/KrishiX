@@ -64,7 +64,7 @@ def root():
 # API ROUTE IMPORTS (Phase 3 - Complete)
 # ============================================================================
 
-from app.api import auth, users, farmer_profiles, commodities, markets, prices, saved
+from app.api import auth, users, farmer_profiles, commodities, markets, prices, saved, decisions, buyers, weather, msp
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
@@ -73,6 +73,10 @@ app.include_router(commodities.router, prefix="/api", tags=["Commodities"])
 app.include_router(markets.router, prefix="/api", tags=["Markets"])
 app.include_router(prices.router, prefix="/api", tags=["Market Prices"])
 app.include_router(saved.router, prefix="/api", tags=["Saved Preferences"])
+app.include_router(decisions.router, prefix="/api", tags=["Selling Decision"])
+app.include_router(buyers.router, prefix="/api", tags=["Buyers"])
+app.include_router(weather.router, prefix="/api", tags=["Weather"])
+app.include_router(msp.router, prefix="/api", tags=["MSP"])
 
 
 if __name__ == "__main__":

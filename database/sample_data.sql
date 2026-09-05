@@ -130,3 +130,106 @@ INSERT INTO saved_commodities (user_id, commodity_id) VALUES
 -- ============================================================================
 -- All prices are per quintal. Reset DB with: docker-compose down -v && docker-compose up
 -- ============================================================================
+
+-- ============================================================================
+-- 8. DEMO BUYERS
+-- These are seed/demo accounts for hackathon demonstration purposes.
+-- They are NOT real registered marketplace users.
+-- data_status = DEMO
+-- ============================================================================
+INSERT INTO buyers (
+    id, name, buyer_type, contact_name, contact_phone, contact_email,
+    state, district, city, latitude, longitude,
+    commodity_name, min_quantity_quintal, max_quantity_quintal,
+    quality_grade, price_premium_pct, is_verified, years_active,
+    rating, payment_terms, notes
+) VALUES
+(
+    'a10e8400-e29b-41d4-a716-446655440001',
+    'Punjab Grain Traders Pvt Ltd', 'Trader',
+    'Amarjit Singh', '9814100001', 'trade@punjabgrain.com',
+    'Punjab', 'Ludhiana', 'Ludhiana',
+    30.9010, 75.8573,
+    'Wheat', 50.00, 500.00, 'Grade A', 2.50,
+    TRUE, 12, 4.5, 'Immediate',
+    'DEMO buyer. Buys wheat directly from farmers. Immediate cash payment at farm gate.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440002',
+    'Nashik Fresh Exports', 'Exporter',
+    'Ramesh Patil', '9823200002', 'exports@nashikfresh.com',
+    'Maharashtra', 'Nashik', 'Nashik',
+    19.9975, 73.7898,
+    'Tomato', 100.00, 2000.00, 'Grade A', 15.00,
+    TRUE, 8, 4.2, '7 days',
+    'DEMO buyer. Exports Grade A tomatoes to Gulf markets. Pays 15% above local mandi modal price.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440003',
+    'Haryana FPO Collective', 'FPO',
+    'Suresh Kumar', '9812300003', 'fpo@haryanafpo.org',
+    'Haryana', 'Hisar', 'Hisar',
+    29.1897, 75.7330,
+    'Maize', 20.00, 300.00, 'Any', 0.00,
+    TRUE, 5, 4.0, '14 days',
+    'DEMO buyer. Farmer Producer Organisation aggregating maize from smallholders in Hisar district.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440004',
+    'Ludhiana Rice Mills', 'Processor',
+    'Gurpreet Kaur', '9815400004', 'procurement@ludhianarice.com',
+    'Punjab', 'Ludhiana', 'Ludhiana',
+    30.8700, 75.8400,
+    'Rice', 200.00, 5000.00, 'Grade B', 0.00,
+    TRUE, 20, 4.7, 'Immediate',
+    'DEMO buyer. Large rice mill buying paddy/rice for processing. Volume buyer — immediate payment.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440005',
+    'Mumbai Onion Wholesalers', 'Trader',
+    'Vijay Mehta', '9820500005', 'onions@mumbaiwhale.com',
+    'Maharashtra', 'Nashik', 'Nashik',
+    19.8762, 75.0234,
+    'Onion', 50.00, 1000.00, 'Any', 5.00,
+    FALSE, 3, 3.8, '7 days',
+    'DEMO buyer. Wholesaler distributing onions to Mumbai retail markets.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440006',
+    'Hisar Cold Storage & Trading', 'Trader',
+    'Rakesh Sharma', '9812600006', 'cold@hisarstore.com',
+    'Haryana', 'Hisar', 'Hisar',
+    29.2100, 75.7500,
+    'Potato', 30.00, 400.00, 'Grade A', 3.00,
+    FALSE, 7, 4.1, 'Immediate',
+    'DEMO buyer. Has cold storage facility. Buys potatoes for storage and off-season resale.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440007',
+    'Maharashtra Mango Exporters Co', 'Exporter',
+    'Prashant Desai', '9823700007', 'mango@mahaexport.com',
+    'Maharashtra', 'Nashik', 'Igatpuri',
+    19.7515, 73.5628,
+    'Mango', 50.00, 800.00, 'Grade A', 20.00,
+    TRUE, 15, 4.6, '7 days',
+    'DEMO buyer. Exports Alphonso and Kesar mangoes. Pays 20% premium for export-quality Grade A produce.'
+),
+(
+    'a10e8400-e29b-41d4-a716-446655440008',
+    'North India Spice Processors', 'Processor',
+    'Anita Gupta', '9810800008', 'spices@northindiaspice.com',
+    'Haryana', 'Hisar', 'Hisar',
+    29.1500, 75.8000,
+    'Turmeric', 10.00, 200.00, 'Any', 0.00,
+    FALSE, 4, 3.9, '14 days',
+    'DEMO buyer. Processes turmeric and chili into packaged spice products.'
+);
+
+-- ============================================================================
+-- 9. UPDATE SEED USERS WITH ROLES
+-- ============================================================================
+UPDATE users SET role = 'farmer' WHERE id IN (
+    '550e8400-e29b-41d4-a716-446655440000',
+    '550e8400-e29b-41d4-a716-446655440001',
+    '550e8400-e29b-41d4-a716-446655440002'
+);
