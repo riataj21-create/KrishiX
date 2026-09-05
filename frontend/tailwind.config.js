@@ -1,32 +1,32 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    './index.html',
-    './src/**/*.{js,ts,jsx,tsx}',
-  ],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+        serif: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+      },
       colors: {
-        primary: '#17624f',
-        'primary-dark': '#104b3d',
-        'primary-light': '#e5f0ec',
-        secondary: '#a56b16',
-        'secondary-dark': '#8a5710',
-        success: '#237a57',
-        warning: '#a56b16',
-        danger: '#b44f4f',
-        neutral: {
-          50: '#f9fafb',
-          100: '#f3f4f6',
-          200: '#e5e7eb',
-          300: '#d1d5db',
-          400: '#9ca3af',
-          500: '#6b7280',
-          600: '#4b5563',
-          700: '#374151',
-          800: '#1f2937',
-          900: '#111827',
+        midnight: '#080b14',
+        sidebar: '#0b0e1a',
+        surface: '#10131f',
+        elevated: '#161a2b',
+        raised: '#1d2236',
+        aubergine: '#211530',
+        indigo: {
+          DEFAULT: '#5b4bdb',
+          dark: '#4536b8',
         },
+        violet: '#8b5cf6',
+        gold: '#d6a84f',
+        emerald: '#1f8f6f',
+        burgundy: '#b1445b',
+        cream: '#f5f1e8',
+      },
+      maxWidth: {
+        content: '1180px',
       },
     },
   },
