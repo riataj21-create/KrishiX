@@ -1,5 +1,5 @@
 """Repository layer for database operations."""
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, func
 from datetime import date, timedelta
 from uuid import UUID
@@ -323,3 +323,393 @@ class BuyerRepository:
     @staticmethod
     def get_by_id(db: Session, buyer_id: UUID) -> Optional[Buyer]:
         return db.query(Buyer).filter(Buyer.id == buyer_id).first()
+
+
+# ============================================================================
+# New Repositories
+# ============================================================================
+
+class FarmerLotRepository:
+    """Farmer lot database operations."""
+
+    @staticmethod
+    def create(db: Session, farmer_id: UUID, **kwargs):
+        from app.models import FarmerLot
+        db_lot = FarmerLot(farmer_id=farmer_id, **kwargs)
+        db.add(db_lot)
+        db.commit()
+        db.refresh(db_lot)
+        return db_lot
+
+    @staticmethod
+    def get_by_id(db: Session, lot_id: UUID):
+        from app.models import FarmerLot
+        return db.query(FarmerLot).filter(FarmerLot.id == lot_id).first()
+
+    @staticmethod
+    def get_by_farmer(db: Session, farmer_id: UUID, status: Optional[str] = None, limit: int = 20, offset: int = 0):
+        from app.models import FarmerLot
+        query = db.query(FarmerLot).filter(FarmerLot.farmer_id == farmer_id)
+        if status:
+            query = query.filter(FarmerLot.status == status)
+        total = query.count()
+        items = query.order_by(desc(FarmerLot.created_at)).limit(limit).offset(offset).all()
+        return total, items
+
+    @staticmethod
+    def update(db: Session, lot_id: UUID, **kwargs):
+        from app.models import FarmerLot
+        db_lot = db.query(FarmerLot).filter(FarmerLot.id == lot_id).first()
+        if db_lot:
+            for key, value in kwargs.items():
+                if value is not None:
+                    setattr(db_lot, key, value)
+            db.commit()
+            db.refresh(db_lot)
+        return db_lot
+
+    @staticmethod
+    def delete(db: Session, lot_id: UUID) -> bool:
+        from app.models import FarmerLot
+        db_lot = db.query(FarmerLot).filter(FarmerLot.id == lot_id).first()
+        if db_lot:
+            db.delete(db_lot)
+            db.commit()
+            return True
+        return False
+
+    @staticmethod
+    def find_compatible_for_aggregation(
+        db: Session,
+        commodity_id: UUID,
+        quality_grade: Optional[str],
+        state: str,
+        district: str,
+        exclude_lot_ids: List[UUID] = None
+    ):
+        """Find lots compatible for aggregation."""
+        from app.models import FarmerLot
+        query = db.query(FarmerLot).filter(
+            and_(
+                FarmerLot.commodity_id == commodity_id,
+                FarmerLot.status == "available",
+                FarmerLot.state == state,
+                FarmerLot.district == district,
+            )
+        )
+        if quality_grade:
+            query = query.filter(FarmerLot.quality_grade == quality_grade)
+        if exclude_lot_ids:
+            query = query.filter(~FarmerLot.id.in_(exclude_lot_ids))
+        return query.all()
+
+
+class BuyerRequirementRepository:
+    """Buyer requirement database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import BuyerRequirement
+        db_req = BuyerRequirement(**kwargs)
+        db.add(db_req)
+        db.commit()
+        db.refresh(db_req)
+        return db_req
+
+    @staticmethod
+    def get_by_id(db: Session, requirement_id: UUID):
+        from app.models import BuyerRequirement
+        return db.query(BuyerRequirement).filter(BuyerRequirement.id == requirement_id).first()
+
+    @staticmethod
+    def get_active_for_commodity(
+        db: Session,
+        commodity_id: UUID,
+        state: Optional[str] = None,
+        min_quantity: Optional[float] = None,
+        limit: int = 20
+    ):
+        """Get active buyer requirements for a commodity."""
+        from app.models import BuyerRequirement
+        query = db.query(BuyerRequirement).options(joinedload(BuyerRequirement.buyer)).filter(
+            and_(
+                BuyerRequirement.commodity_id == commodity_id,
+                BuyerRequirement.is_active == True,
+            )
+        )
+        if state:
+            query = query.filter(
+                or_(
+                    BuyerRequirement.pickup_location_state == state,
+                    BuyerRequirement.pickup_location_state.is_(None),
+                )
+            )
+        if min_quantity is not None:
+            query = query.filter(
+                or_(
+                    BuyerRequirement.maximum_quantity.is_(None),
+                    BuyerRequirement.maximum_quantity >= min_quantity,
+                )
+            )
+        return query.limit(limit).all()
+
+
+class OpportunityRepository:
+    """Opportunity database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import Opportunity
+        db_opp = Opportunity(**kwargs)
+        db.add(db_opp)
+        db.commit()
+        db.refresh(db_opp)
+        return db_opp
+
+    @staticmethod
+    def get_by_id(db: Session, opportunity_id: UUID):
+        from app.models import Opportunity
+        return db.query(Opportunity).filter(Opportunity.id == opportunity_id).first()
+
+    @staticmethod
+    def get_by_lot(db: Session, lot_id: UUID):
+        from app.models import Opportunity
+        return db.query(Opportunity).filter(Opportunity.lot_id == lot_id).order_by(Opportunity.rank).all()
+
+    @staticmethod
+    def delete_by_lot(db: Session, lot_id: UUID):
+        """Delete all opportunities for a lot (e.g., before re-analysis)."""
+        from app.models import Opportunity
+        db.query(Opportunity).filter(Opportunity.lot_id == lot_id).delete()
+        db.commit()
+
+
+class OfferRepository:
+    """Offer database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import Offer
+        db_offer = Offer(**kwargs)
+        db.add(db_offer)
+        db.commit()
+        db.refresh(db_offer)
+        return db_offer
+
+    @staticmethod
+    def get_by_id(db: Session, offer_id: UUID):
+        from app.models import Offer
+        return db.query(Offer).filter(Offer.id == offer_id).first()
+
+    @staticmethod
+    def get_by_lot(db: Session, lot_id: UUID):
+        from app.models import Offer
+        return db.query(Offer).filter(Offer.lot_id == lot_id).order_by(desc(Offer.created_at)).all()
+
+    @staticmethod
+    def get_by_buyer(db: Session, buyer_id: UUID, status: Optional[str] = None):
+        from app.models import Offer
+        query = db.query(Offer).filter(Offer.buyer_id == buyer_id)
+        if status:
+            query = query.filter(Offer.status == status)
+        return query.order_by(desc(Offer.created_at)).all()
+
+    @staticmethod
+    def update(db: Session, offer_id: UUID, **kwargs):
+        from app.models import Offer
+        db_offer = db.query(Offer).filter(Offer.id == offer_id).first()
+        if db_offer:
+            for key, value in kwargs.items():
+                setattr(db_offer, key, value)
+            db.commit()
+            db.refresh(db_offer)
+        return db_offer
+
+
+class TransactionRepository:
+    """Transaction database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import Transaction
+        db_txn = Transaction(**kwargs)
+        db.add(db_txn)
+        db.commit()
+        db.refresh(db_txn)
+        return db_txn
+
+    @staticmethod
+    def get_by_id(db: Session, transaction_id: UUID):
+        from app.models import Transaction
+        return db.query(Transaction).filter(Transaction.id == transaction_id).first()
+
+    @staticmethod
+    def get_by_farmer(db: Session, farmer_id: UUID):
+        from app.models import Transaction
+        return db.query(Transaction).filter(Transaction.farmer_id == farmer_id).order_by(desc(Transaction.created_at)).all()
+
+    @staticmethod
+    def get_by_offer(db: Session, offer_id: UUID):
+        from app.models import Transaction
+        return db.query(Transaction).filter(Transaction.offer_id == offer_id).first()
+
+    @staticmethod
+    def get_by_buyer(db: Session, buyer_id: UUID):
+        from app.models import Transaction
+        return db.query(Transaction).filter(Transaction.buyer_id == buyer_id).order_by(desc(Transaction.created_at)).all()
+
+    @staticmethod
+    def update(db: Session, transaction_id: UUID, **kwargs):
+        from app.models import Transaction
+        db_txn = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+        if db_txn:
+            for key, value in kwargs.items():
+                setattr(db_txn, key, value)
+            db.commit()
+            db.refresh(db_txn)
+        return db_txn
+
+
+class TransactionEventRepository:
+    """Transaction event database operations."""
+
+    @staticmethod
+    def create(db: Session, transaction_id: UUID, event_type: str, event_data: Optional[str], actor_id: Optional[UUID]):
+        from app.models import TransactionEvent
+        db_event = TransactionEvent(
+            transaction_id=transaction_id,
+            event_type=event_type,
+            event_data=event_data,
+            actor_id=actor_id
+        )
+        db.add(db_event)
+        db.commit()
+        db.refresh(db_event)
+        return db_event
+
+    @staticmethod
+    def get_by_transaction(db: Session, transaction_id: UUID):
+        from app.models import TransactionEvent
+        return db.query(TransactionEvent).filter(
+            TransactionEvent.transaction_id == transaction_id
+        ).order_by(TransactionEvent.created_at).all()
+
+
+class PaymentRepository:
+    """Payment database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import Payment
+        db_payment = Payment(**kwargs)
+        db.add(db_payment)
+        db.commit()
+        db.refresh(db_payment)
+        return db_payment
+
+    @staticmethod
+    def get_by_transaction(db: Session, transaction_id: UUID):
+        from app.models import Payment
+        return db.query(Payment).filter(Payment.transaction_id == transaction_id).first()
+
+    @staticmethod
+    def update(db: Session, transaction_id: UUID, **kwargs):
+        from app.models import Payment
+        db_payment = db.query(Payment).filter(Payment.transaction_id == transaction_id).first()
+        if db_payment:
+            for key, value in kwargs.items():
+                setattr(db_payment, key, value)
+            db.commit()
+            db.refresh(db_payment)
+        return db_payment
+
+
+class ReviewRepository:
+    """Review database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import Review
+        db_review = Review(**kwargs)
+        db.add(db_review)
+        db.commit()
+        db.refresh(db_review)
+        return db_review
+
+    @staticmethod
+    def get_by_reviewee(db: Session, reviewee_id: UUID):
+        from app.models import Review
+        return db.query(Review).filter(Review.reviewee_id == reviewee_id).order_by(desc(Review.created_at)).all()
+
+    @staticmethod
+    def get_trust_metrics(db: Session, user_id: UUID) -> dict:
+        """Calculate trust metrics for a user."""
+        from app.models import Review, Transaction
+        
+        # Get all reviews received by this user
+        reviews = db.query(Review).filter(Review.reviewee_id == user_id).all()
+        
+        # Get transaction counts
+        transactions_as_farmer = db.query(Transaction).filter(Transaction.farmer_id == user_id).all()
+        transactions_as_buyer = db.query(Transaction).filter(Transaction.buyer_id == user_id).all()
+        all_transactions = transactions_as_farmer + transactions_as_buyer
+        
+        total_transactions = len(all_transactions)
+        successful = len([t for t in all_transactions if t.status == "completed"])
+        disputed = len([t for t in all_transactions if t.is_disputed])
+        
+        if not reviews:
+            return {
+                "total_transactions": total_transactions,
+                "successful_transactions": successful,
+                "disputed_transactions": disputed,
+                "total_reviews": 0,
+                "average_rating": None,
+                "payment_reliability_avg": None,
+                "communication_rating_avg": None,
+            }
+        
+        avg_rating = sum(r.overall_rating for r in reviews) / len(reviews)
+        payment_ratings = [r.payment_reliability for r in reviews if r.payment_reliability]
+        comm_ratings = [r.communication_rating for r in reviews if r.communication_rating]
+        
+        return {
+            "total_transactions": total_transactions,
+            "successful_transactions": successful,
+            "disputed_transactions": disputed,
+            "total_reviews": len(reviews),
+            "average_rating": round(avg_rating, 2),
+            "payment_reliability_avg": round(sum(payment_ratings) / len(payment_ratings), 2) if payment_ratings else None,
+            "communication_rating_avg": round(sum(comm_ratings) / len(comm_ratings), 2) if comm_ratings else None,
+        }
+
+
+class AggregationGroupRepository:
+    """Aggregation group database operations."""
+
+    @staticmethod
+    def create(db: Session, **kwargs):
+        from app.models import AggregationGroup
+        db_group = AggregationGroup(**kwargs)
+        db.add(db_group)
+        db.commit()
+        db.refresh(db_group)
+        return db_group
+
+    @staticmethod
+    def get_by_id(db: Session, group_id: UUID):
+        from app.models import AggregationGroup
+        return db.query(AggregationGroup).filter(AggregationGroup.id == group_id).first()
+
+    @staticmethod
+    def add_member(db: Session, group_id: UUID, lot_id: UUID, committed_quantity: float):
+        from app.models import AggregationMember
+        db_member = AggregationMember(
+            group_id=group_id,
+            lot_id=lot_id,
+            committed_quantity=committed_quantity
+        )
+        db.add(db_member)
+        db.commit()
+        db.refresh(db_member)
+        return db_member
