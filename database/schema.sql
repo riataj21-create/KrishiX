@@ -13,11 +13,14 @@ CREATE TABLE users (
   email         VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   is_active     BOOLEAN DEFAULT TRUE,
+  -- Role controls access: farmer | buyer | admin
+  role          VARCHAR(20) NOT NULL DEFAULT 'farmer',
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_users_email      ON users (email);
+CREATE INDEX idx_users_role       ON users (role);
 CREATE INDEX idx_users_created_at ON users (created_at);
 
 -- ============================================================================
