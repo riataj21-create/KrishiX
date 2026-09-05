@@ -50,8 +50,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
       args:
-        # Pass backend URL at build time so Next.js bakes the correct proxy into routes-manifest.json
-        BACKEND_URL: http://krishix-api:8000
+        VITE_API_URL: http://krishix-api:8000
     container_name: krishix-web
     ports:
       - "3000:3000"

@@ -7,15 +7,15 @@ RUN npm ci
 
 COPY . .
 
-# BACKEND_URL must be available at build time because Next.js bakes rewrites
-# into routes-manifest.json during `next build`.
-# In Docker: krishix-api:8000 (the backend service name)
-# Locally:   localhost:8000
-ARG BACKEND_URL=http://localhost:8000
-ENV BACKEND_URL=$BACKEND_URL
+# VITE_API_URL must be available at build time.
+# Vite bakes VITE_* env vars into the static bundle during `vite build`.
+# In Docker: http://krishix-api:8000 (backend container name)
+# Locally:   http://localhost:8000 (default in vite.config.ts)
+ARG VITE_API_URL=http://localhost:8000
+ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["npm", "run", "preview"]
