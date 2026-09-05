@@ -1,30 +1,27 @@
 """FastAPI application initialization."""
 import os
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
 from app.database import engine, Base, get_db
-from app.models import (
-    User, FarmerProfile, Commodity, Market, MarketPrice,
-    SavedMarket, SavedCommodity
-)
+import app.models  # noqa: F401 — registers all models with Base.metadata
 
-# Create tables if they don't exist
+# Create all tables (idempotent; Alembic handles schema changes)
 Base.metadata.create_all(bind=engine)
 
-# Initialize FastAPI app
 app = FastAPI(
     title="KrishiX API",
-    description="Market intelligence for smarter agricultural decisions",
-    version="1.0.0",
+    description="Agricultural market intelligence and transaction-feasibility platform",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
 )
 
-# CORS Configuration
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://localhost:8000",
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,48 +32,48 @@ app.add_middleware(
 )
 
 
-# ============================================================================
-# HEALTH CHECK
-# ============================================================================
+# ── Health ───────────────────────────────────────────────────────────────────
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 def health_check():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "KrishiX API"}
+    return {"status": "ok", "service": "KrishiX API", "version": "2.0.0"}
 
 
-# ============================================================================
-# ROOT ENDPOINT
-# ============================================================================
-
-@app.get("/")
+@app.get("/", tags=["Health"])
 def root():
-    """API root endpoint."""
     return {
         "service": "KrishiX",
-        "description": "Market intelligence for smarter agricultural decisions",
+        "description": "Agricultural market intelligence and transaction-feasibility platform",
         "docs": "/docs",
-        "version": "1.0.0"
+        "version": "2.0.0",
     }
 
 
-# ============================================================================
-# API ROUTE IMPORTS (Phase 3 - Complete)
-# ============================================================================
+# ── Routers ──────────────────────────────────────────────────────────────────
+from app.api import (  # noqa: E402
+    auth, users, farmer_profiles,
+    commodities, markets, prices,
+    saved, decisions, buyers,
+    weather, msp,
+    lots, opportunities, transactions, demo,
+)
 
-from app.api import auth, users, farmer_profiles, commodities, markets, prices, saved, decisions, buyers, weather, msp
-
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(users.router, prefix="/api/users", tags=["Users"])
-app.include_router(farmer_profiles.router, prefix="/api", tags=["Farmer Profiles"])
-app.include_router(commodities.router, prefix="/api", tags=["Commodities"])
-app.include_router(markets.router, prefix="/api", tags=["Markets"])
-app.include_router(prices.router, prefix="/api", tags=["Market Prices"])
-app.include_router(saved.router, prefix="/api", tags=["Saved Preferences"])
-app.include_router(decisions.router, prefix="/api", tags=["Selling Decision"])
-app.include_router(buyers.router, prefix="/api", tags=["Buyers"])
-app.include_router(weather.router, prefix="/api", tags=["Weather"])
-app.include_router(msp.router, prefix="/api", tags=["MSP"])
+app.include_router(auth.router,             prefix="/api/auth",         tags=["Authentication"])
+app.include_router(users.router,            prefix="/api/users",        tags=["Users"])
+app.include_router(farmer_profiles.router,  prefix="/api",              tags=["Farmer Profiles"])
+app.include_router(commodities.router,      prefix="/api",              tags=["Commodities"])
+app.include_router(markets.router,          prefix="/api",              tags=["Markets"])
+app.include_router(prices.router,           prefix="/api",              tags=["Market Prices"])
+app.include_router(saved.router,            prefix="/api",              tags=["Saved"])
+app.include_router(decisions.router,        prefix="/api",              tags=["Selling Decision"])
+app.include_router(buyers.router,           prefix="/api",              tags=["Buyers"])
+app.include_router(weather.router,          prefix="/api",              tags=["Weather"])
+app.include_router(msp.router,              prefix="/api",              tags=["MSP"])
+# ── New v2 routers ───────────────────────────────────────────────────────────
+app.include_router(lots.router,             prefix="/api",              tags=["Lots"])
+app.include_router(opportunities.router,    prefix="/api",              tags=["Opportunities"])
+app.include_router(transactions.router,     prefix="/api",              tags=["Transactions"])
+app.include_router(demo.router,             prefix="/api/demo",         tags=["Demo"])
 
 
 if __name__ == "__main__":
