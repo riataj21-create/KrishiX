@@ -16,8 +16,8 @@ class UserRepository:
     """User database operations."""
 
     @staticmethod
-    def create(db: Session, email: str, password: str) -> User:
-        db_user = User(email=email, password_hash=hash_password(password))
+    def create(db: Session, email: str, password: str, role: str = "farmer") -> User:
+        db_user = User(email=email, password_hash=hash_password(password), role=role)
         db.add(db_user)
         db.commit()
         db.refresh(db_user)

@@ -7,7 +7,13 @@ RUN npm ci
 
 COPY . .
 
-# Build Tailwind/Next properly so CSS loads
+# BACKEND_URL must be available at build time because Next.js bakes rewrites
+# into routes-manifest.json during `next build`.
+# In Docker: krishix-api:8000 (the backend service name)
+# Locally:   localhost:8000
+ARG BACKEND_URL=http://localhost:8000
+ENV BACKEND_URL=$BACKEND_URL
+
 RUN npm run build
 
 EXPOSE 3000

@@ -37,9 +37,10 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
             detail="Invalid email or password"
         )
     
-    # Create access token
+    # Create access token — include role in JWT payload
     access_token = create_access_token(
         user_id=str(user.id),
+        role=user.role,
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     

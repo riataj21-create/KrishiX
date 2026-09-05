@@ -16,6 +16,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
+    role: str = Field(default="farmer", pattern="^(farmer|buyer)$")
 
 
 class LoginRequest(UserBase):
@@ -25,6 +26,7 @@ class LoginRequest(UserBase):
 class UserResponse(UserBase):
     id: UUID
     is_active: bool
+    role: str
     created_at: datetime
     updated_at: datetime
 
@@ -34,6 +36,11 @@ class UserResponse(UserBase):
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
 
 
 # ============================================================================
@@ -266,3 +273,4 @@ class TokenResponse(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[UUID] = None
+    role: Optional[str] = None

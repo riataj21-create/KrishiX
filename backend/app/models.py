@@ -16,6 +16,8 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    # Role: farmer | buyer | admin
+    role = Column(String(20), nullable=False, default="farmer", index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -162,4 +164,40 @@ class SavedCommodity(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "commodity_id", name="uq_user_commodity"),
+    )
+
+
+class Buyer(Base):
+    """Buyer profile — traders, exporters, FPOs, processors."""
+    __tablename__ = "buyers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    buyer_type = Column(String(50), nullable=False)   # Trader | Exporter | FPO | Processor | Retailer
+    contact_name = Column(String(255))
+    contact_phone = Column(String(20))
+    contact_email = Column(String(255))
+    state = Column(String(100), nullable=False, index=True)
+    district = Column(String(100), nullable=False, index=True)
+    city = Column(String(100))
+    latitude = Column(Numeric(10, 8))
+    longitude = Column(Numeric(11, 8))
+    # What they buy
+    commodity_name = Column(String(100), nullable=False, index=True)
+    min_quantity_quintal = Column(Numeric(10, 2))   # minimum purchase quantity
+    max_quantity_quintal = Column(Numeric(10, 2))   # maximum they can absorb
+    quality_grade = Column(String(50))              # Grade A | Grade B | Any
+    price_premium_pct = Column(Numeric(5, 2), default=0)  # % above mandi modal price they'll pay
+    # Credibility signals
+    is_verified = Column(Boolean, default=False)
+    years_active = Column(Integer)
+    rating = Column(Numeric(3, 1))                  # 1.0 – 5.0
+    payment_terms = Column(String(100))             # "Immediate" | "7 days" | "14 days"
+    notes = Column(String(500))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_buyer_commodity", "commodity_name"),
+        Index("idx_buyer_state_district", "state", "district"),
     )

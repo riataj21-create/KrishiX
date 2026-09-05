@@ -32,6 +32,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      # Allow requests from both browser and Next.js server-side proxy
+      CORS_ORIGINS: http://localhost:3000,http://krishix-web:3000
     ports:
       - "8000:8000"
     depends_on:
@@ -47,9 +49,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
+      args:
+        # Pass backend URL at build time so Next.js bakes the correct proxy into routes-manifest.json
+        BACKEND_URL: http://krishix-api:8000
     container_name: krishix-web
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
     depends_on:
