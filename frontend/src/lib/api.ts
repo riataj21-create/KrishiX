@@ -47,10 +47,10 @@ async function makeRequest<T = unknown>(endpoint: string, options: RequestOption
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register: (email: string, password: string) =>
-    makeRequest("/api/auth/register", { method: "POST", body: { email, password } }),
+  register: (email: string, password: string, role: 'farmer' | 'buyer' = 'farmer') =>
+    makeRequest("/api/auth/register", { method: "POST", body: { email, password, role } }),
   login: (email: string, password: string) =>
-    makeRequest<{ access_token: string; token_type: string }>("/api/auth/login", {
+    makeRequest<{ access_token: string; token_type: string; expires_in?: number }>("/api/auth/login", {
       method: "POST", body: { email, password },
     }),
   logout: () => makeRequest("/api/auth/logout", { method: "POST" }),
@@ -58,7 +58,7 @@ export const authAPI = {
 
 // ── Users ───────────────────────────────────────────────────────────────────
 export const userAPI = {
-  getCurrentUser: () => makeRequest<{ id: string; email: string }>("/api/users/me"),
+  getCurrentUser: () => makeRequest<{ id: string; email: string; role: 'farmer' | 'buyer' }>("/api/users/me"),
   changePassword: (current_password: string, new_password: string) =>
     makeRequest("/api/users/me/password", {
       method: "PUT", body: { current_password, new_password },
