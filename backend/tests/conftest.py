@@ -1,16 +1,13 @@
 """Test fixtures and configuration."""
 import os
-# MUST set DATABASE_URL before any app module is imported — database.py reads
-# this at module load time and would otherwise try to connect to postgres.
-os.environ.setdefault(
-    "DATABASE_URL",
-    "sqlite:///./test_krishix.db",
-)
+# Set before any app module imports
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test_krishix.db")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-unit-tests-only")
 
 import pytest
 from decimal import Decimal
 from datetime import date, timedelta
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from sqlalchemy import create_engine
@@ -52,6 +49,21 @@ def fresh_db():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def mock_external_apis():
+    """
+    Mock all external HTTP calls for the entire test session.
+    Prevents OSRM and Open-Meteo from being called during tests.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    # Only patch the OSRM function in net_realization engine (the one that makes real HTTP calls)
+    osrm_mock = AsyncMock(return_value=None)   # None → triggers Haversine fallback
+
+    with patch("app.engines.net_realization._osrm_road_distance_km", new=osrm_mock):
+        yield
 
 
 @pytest.fixture
@@ -221,7 +233,7 @@ def gulf_buyer_requirement(db, tomato_commodity):
 
 
 @pytest.fixture
-def gate_buyer_requirement(db, tomato_commodity):
+def gate_buyer_requirement(db, tomato_commodity, buyer_user):
     """Farm-gate buyer — Grade B, 50 kg min, immediate payment, buyer pickup → EXECUTABLE."""
     from app.models import Buyer, BuyerRequirement
     today = date.today()
@@ -236,6 +248,7 @@ def gate_buyer_requirement(db, tomato_commodity):
         source_type="demo",
         payment_days=0,
         pickup_available=True,
+        user_id=buyer_user.id,   # linked so offer_from_opportunity can find the buyer user
     )
     db.add(buyer)
     db.flush()

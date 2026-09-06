@@ -1,29 +1,21 @@
 """
 Buyers API
 
-GET /api/buyers      — list/filter buyers (WHO should I sell to?)
-GET /api/buyers/{id} — single buyer detail
-
-IMPORTANT — Cold-start transparency:
-The buyer records returned are DEMO seed data for the hackathon demonstration.
-They are NOT real registered marketplace users.
-Every response includes a data_status field to make this explicit.
-
-When real buyers register on the platform, they will appear here alongside
-or instead of the demo records. The empty-state case (no buyers match) is
-handled correctly — the selling decision still works without buyers.
+GET /api/buyers               — list/filter buyers
+GET /api/buyers/{id}          — single buyer detail
+GET /api/buyers/{id}/requirements — buyer's active purchase requirements
 """
-
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.models import Buyer, BuyerRequirement
 from app.repository import BuyerRepository
 from app.schemas import TokenData
 
@@ -31,8 +23,35 @@ logger = logging.getLogger("krishix.api.buyers")
 router = APIRouter()
 
 
-def _serialize_buyer(buyer) -> dict:
-    """Serialize a Buyer ORM object to a plain dict."""
+def _serialize_requirement(req: BuyerRequirement) -> dict:
+    return {
+        "id": str(req.id),
+        "commodity_id": str(req.commodity_id),
+        "minimum_quantity": float(req.minimum_quantity),
+        "minimum_quantity_kg": float(req.minimum_quantity) * 100,
+        "maximum_quantity": float(req.maximum_quantity) if req.maximum_quantity else None,
+        "required_grade": req.required_grade,
+        "offered_price": float(req.offered_price),
+        "offered_price_per_kg": round(float(req.offered_price) / 100, 2),
+        "payment_days": req.payment_days,
+        "payment_method": req.payment_method,
+        "pickup_available": bool(req.pickup_available),
+        "pickup_location_state": req.pickup_location_state,
+        "pickup_location_district": req.pickup_location_district,
+        "transport_cost_total": float(req.transport_cost_total) if req.transport_cost_total else None,
+        "transport_cost_source": req.transport_cost_source,
+        "active_from": str(req.active_from),
+        "active_until": str(req.active_until),
+        "is_active": bool(req.is_active),
+        "source_type": req.source_type,
+        "notes": req.notes,
+    }
+
+
+def _serialize_buyer(buyer: Buyer, include_requirements: bool = False) -> dict:
+    reqs = buyer.buyer_requirements if include_requirements else []
+    active_reqs = [r for r in reqs if r.is_active and r.active_until >= date.today()]
+
     return {
         "id": str(buyer.id),
         "name": buyer.name,
@@ -46,15 +65,24 @@ def _serialize_buyer(buyer) -> dict:
         "latitude": float(buyer.latitude) if buyer.latitude else None,
         "longitude": float(buyer.longitude) if buyer.longitude else None,
         "commodity_name": buyer.commodity_name,
+        # ── Fields missing from old serializer ─────────────────────
+        "source_type": buyer.source_type,                       # DEMO | REFERENCE | VERIFIED_ACTIVE
+        "payment_days": buyer.payment_days,
+        "payment_method": buyer.payment_method,
+        "pickup_available": bool(buyer.pickup_available) if buyer.pickup_available is not None else False,
+        "verification_status": buyer.verification_status,
+        "active_until": str(buyer.active_until) if buyer.active_until else None,
+        # ── Existing fields ─────────────────────────────────────────
         "min_quantity_quintal": float(buyer.min_quantity_quintal) if buyer.min_quantity_quintal else None,
         "max_quantity_quintal": float(buyer.max_quantity_quintal) if buyer.max_quantity_quintal else None,
         "quality_grade": buyer.quality_grade,
         "price_premium_pct": float(buyer.price_premium_pct) if buyer.price_premium_pct else 0.0,
-        "is_verified": buyer.is_verified,
+        "is_verified": bool(buyer.is_verified),
         "years_active": buyer.years_active,
         "rating": float(buyer.rating) if buyer.rating else None,
-        "payment_terms": buyer.payment_terms,
         "notes": buyer.notes,
+        "active_requirements_count": len(active_reqs),
+        "active_requirements": [_serialize_requirement(r) for r in active_reqs] if include_requirements else None,
         "whatsapp_link": (
             f"https://wa.me/91{buyer.contact_phone.replace(' ', '').replace('-', '')}"
             if buyer.contact_phone else None
@@ -64,34 +92,19 @@ def _serialize_buyer(buyer) -> dict:
 
 @router.get("/buyers")
 def list_buyers(
-    commodity: Optional[str] = Query(
-        None,
-        description="Filter by commodity name (partial match, case-insensitive)"
-    ),
+    commodity: Optional[str] = Query(None, description="Commodity name (partial, case-insensitive)"),
     state: Optional[str] = Query(None, description="Filter by state"),
-    buyer_type: Optional[str] = Query(
-        None,
-        description="Filter by type: Trader | Exporter | FPO | Processor | Retailer"
-    ),
-    quantity: Optional[float] = Query(
-        None, gt=0,
-        description="Farmer's quantity in quintals — filters buyers who can absorb this volume"
-    ),
+    buyer_type: Optional[str] = Query(None, description="Trader | Exporter | FPO | Processor | Retailer"),
+    quantity: Optional[float] = Query(None, gt=0, description="Farmer quantity in quintals"),
+    source_type: Optional[str] = Query(None, description="Filter by source_type: demo | reference | verified_active"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     token_data: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    List buyers matching the given filters.
-
-    WHO should I sell to? — returns verified and rated buyers
-    who buy the specified commodity, filtered by state and quantity capacity.
-
-    Results are ordered by: verified first, then by rating.
-
-    Data note: buyers in the demo system are seed data, not real registered users.
-    The data_status field in the response makes this explicit.
+    List buyers with filters. Results include source_type so the frontend
+    can clearly label DEMO buyers and never present them as real adoption.
     """
     total, buyers = BuyerRepository.get_all(
         db,
@@ -103,8 +116,14 @@ def list_buyers(
         offset=offset,
     )
 
-    # Determine data status — if all buyers have known demo IDs, mark as DEMO
-    data_status = "DEMO"  # will become "LIVE" when real buyers register
+    # Apply source_type filter in Python (small result set in demo)
+    if source_type:
+        buyers = [b for b in buyers if b.source_type == source_type]
+        total = len(buyers)
+
+    data_status = "DEMO" if all(
+        (b.source_type or "demo") in ("demo", "reference") for b in buyers
+    ) else "MIXED"
 
     if total == 0:
         return {
@@ -120,10 +139,10 @@ def list_buyers(
 
     return {
         "total": total,
-        "items": [_serialize_buyer(b) for b in buyers],
+        "items": [_serialize_buyer(b, include_requirements=False) for b in buyers],
         "data_status": data_status,
         "data_note": (
-            "Buyer records marked as DEMO are seed data for demonstration purposes. "
+            "Buyers marked DEMO are seed data for demonstration. "
             "They are not real registered marketplace users."
         ),
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
@@ -136,15 +155,53 @@ def get_buyer(
     token_data: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get detailed profile of a single buyer."""
-    buyer = BuyerRepository.get_by_id(db, buyer_id)
+    """Get detailed buyer profile including active requirements."""
+    buyer = (
+        db.query(Buyer)
+        .options(joinedload(Buyer.buyer_requirements))
+        .filter(Buyer.id == buyer_id)
+        .first()
+    )
     if not buyer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Buyer not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Buyer not found")
+
     return {
-        **_serialize_buyer(buyer),
-        "data_status": "DEMO",
+        **_serialize_buyer(buyer, include_requirements=True),
+        "data_status": buyer.source_type or "demo",
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/buyers/{buyer_id}/requirements")
+def get_buyer_requirements(
+    buyer_id: UUID,
+    active_only: bool = Query(True, description="Return only currently active requirements"),
+    token_data: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all purchase requirements for a buyer.
+    Active requirements drive the opportunity discovery engine.
+    """
+    buyer = db.query(Buyer).filter(Buyer.id == buyer_id).first()
+    if not buyer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Buyer not found")
+
+    query = db.query(BuyerRequirement).filter(BuyerRequirement.buyer_id == buyer_id)
+    if active_only:
+        today = date.today()
+        query = query.filter(
+            BuyerRequirement.is_active == True,
+            BuyerRequirement.active_until >= today,
+        )
+
+    reqs = query.all()
+    return {
+        "buyer_id": str(buyer_id),
+        "buyer_name": buyer.name,
+        "source_type": buyer.source_type,
+        "total": len(reqs),
+        "active_only": active_only,
+        "requirements": [_serialize_requirement(r) for r in reqs],
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }

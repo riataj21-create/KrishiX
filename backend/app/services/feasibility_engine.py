@@ -632,5 +632,6 @@ def evaluate_opportunity(
     transport: Optional[TransportData] = None,
     market_charges: Optional[Decimal] = None,
     overlay: Optional[RecoveryOverlay] = None,
+    today: Optional[date] = None,
 ) -> FeasibilityResult:
-    return FeasibilityEngine().evaluate(farmer_lot, buyer_req, transport, market_charges, overlay)
+    return FeasibilityEngine().evaluate(farmer_lot, buyer_req, transport, market_charges, overlay, today)

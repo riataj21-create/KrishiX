@@ -75,18 +75,60 @@ def analyze_opportunities(
     _require_lot_owner(db, lot_id, UUID(str(token_data.user_id)))
     service = OpportunityService(db)
     items = service.discover_and_analyze(lot_id, farmer_priority=farmer_priority)
+
     executable = [i for i in items if i.get("feasibility_decision") == "EXECUTABLE"]
+    all_prices = [
+        i.get("offered_price") for i in items
+        if i.get("offered_price") is not None
+    ]
+
+    # Opportunity gap: difference between highest quoted price and best executable price
+    opportunity_gap = None
+    if executable and all_prices:
+        best_executable_price = max(
+            i.get("offered_price", 0) for i in executable if i.get("offered_price")
+        )
+        highest_quoted_price = max(all_prices)
+        if highest_quoted_price > best_executable_price:
+            opportunity_gap = {
+                "highest_quoted_per_quintal": highest_quoted_price,
+                "highest_quoted_per_kg": round(highest_quoted_price / 100, 2),
+                "best_executable_per_quintal": best_executable_price,
+                "best_executable_per_kg": round(best_executable_price / 100, 2),
+                "gap_per_quintal": round(highest_quoted_price - best_executable_price, 2),
+                "gap_per_kg": round((highest_quoted_price - best_executable_price) / 100, 2),
+                "label": "Opportunity gap — not guaranteed lost income. The higher-quoted opportunity has unmet constraints.",
+            }
+
     if executable:
-        rec = f"Best executable option: {executable[0].get('title')} (ranked by estimated realization, not advertised price)."
+        rec = (
+            f"Best executable option: {executable[0].get('title')} "
+            f"(ranked by estimated realization, not advertised price)."
+        )
+    elif any(i.get("feasibility_decision") == "RECOVERABLE" for i in items):
+        rec = "No executable option yet — but recoverable options exist. Apply the suggested changes to unlock a sale."
     elif items:
-        rec = "No executable option yet. Open a recoverable opportunity to see the smallest change that could make a sale work."
+        rec = "No executable option found. All opportunities have unmet constraints. See blocking reasons for details."
     else:
         rec = "No opportunities found for this lot."
+
     return {
         "lot_id": str(lot_id),
         "items": items,
         "recommendation": rec,
-        "data_caveat": "Buyer offers in this demo are labelled demo/reference. Market prices are observed sample data, not guaranteed receipts.",
+        "opportunity_gap": opportunity_gap,
+        "summary": {
+            "total": len(items),
+            "executable": len([i for i in items if i.get("feasibility_decision") == "EXECUTABLE"]),
+            "recoverable": len([i for i in items if i.get("feasibility_decision") == "RECOVERABLE"]),
+            "not_viable": len([i for i in items if i.get("feasibility_decision") == "NOT_VIABLE"]),
+            "insufficient_data": len([i for i in items if i.get("feasibility_decision") == "INSUFFICIENT_DATA"]),
+        },
+        "data_caveat": (
+            "Buyer offers in this demo are labelled demo/reference. "
+            "Market prices are observed sample data, not guaranteed receipts. "
+            "Estimated net realization deducts labelled costs only."
+        ),
     }
 
 
@@ -136,3 +178,80 @@ def apply_recovery(
         return service.apply_recovery(opportunity_id, body.change_types)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ── What-if ───────────────────────────────────────────────────────────────────
+
+class WhatIfRequest(BaseModel):
+    """
+    Override any farmer constraint to see how the feasibility result changes.
+    The lot in the database is NOT modified — this is a read-only simulation.
+    Every change is sent to the backend; the frontend never calculates the result.
+    """
+    extra_quantity_kg: Optional[float] = Field(None, ge=0, description="Additional kg from aggregation")
+    negotiated_payment_days: Optional[int] = Field(None, ge=0)
+    negotiated_price_per_kg: Optional[float] = Field(None, gt=0)
+    assume_buyer_pickup: Optional[bool] = None
+    transport_cost_override: Optional[float] = Field(None, ge=0)
+
+
+@router.post("/lots/{lot_id}/whatif")
+def whatif_recheck(
+    lot_id: UUID,
+    body: WhatIfRequest,
+    farmer_priority: str = Query("maximize_realization"),
+    token_data: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Re-evaluate all opportunities for this lot with modified farmer constraints.
+
+    The lot is NOT changed in the database. This is a pure simulation.
+    Useful for demonstrating: "What if I had 300 kg? → EXECUTABLE"
+
+    Returns full opportunity list with recalculated feasibility decisions.
+    The frontend must show a clear BEFORE/AFTER comparison.
+    """
+    _require_lot_owner(db, lot_id, UUID(str(token_data.user_id)))
+
+    # Build overlay from request
+    overlay = overlay_from_dict({
+        "extra_quantity": (body.extra_quantity_kg / 100) if body.extra_quantity_kg else 0,
+        "negotiated_payment_days": body.negotiated_payment_days,
+        "negotiated_price": (body.negotiated_price_per_kg * 100) if body.negotiated_price_per_kg else None,
+        "transport_cost_override": body.transport_cost_override,
+        "assume_buyer_pickup": body.assume_buyer_pickup or False,
+    })
+
+    service = OpportunityService(db)
+    items = service.discover_and_analyze(
+        lot_id,
+        farmer_priority=farmer_priority,
+        overlay=overlay,
+    )
+
+    executable = [i for i in items if i.get("feasibility_decision") == "EXECUTABLE"]
+    summary = {
+        "total": len(items),
+        "executable": len(executable),
+        "recoverable": len([i for i in items if i.get("feasibility_decision") == "RECOVERABLE"]),
+        "not_viable": len([i for i in items if i.get("feasibility_decision") == "NOT_VIABLE"]),
+    }
+
+    return {
+        "lot_id": str(lot_id),
+        "whatif_applied": {
+            "extra_quantity_kg": body.extra_quantity_kg,
+            "negotiated_payment_days": body.negotiated_payment_days,
+            "negotiated_price_per_kg": body.negotiated_price_per_kg,
+            "assume_buyer_pickup": body.assume_buyer_pickup,
+            "transport_cost_override": body.transport_cost_override,
+        },
+        "items": items,
+        "summary": summary,
+        "note": (
+            "Lot NOT modified. This is a simulation. "
+            "Apply recovery actions to persist changes."
+        ),
+    }
+

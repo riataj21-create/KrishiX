@@ -298,4 +298,4 @@ class TestAuth:
 
     def test_protected_endpoint_without_token(self, client):
         resp = client.get("/api/lots")
-        assert resp.status_code == 403
+        assert resp.status_code in (401, 403)

@@ -361,6 +361,8 @@ class FarmerLot(Base):
     commodity = relationship("Commodity")
     opportunities = relationship("Opportunity", back_populates="lot")
     aggregation_memberships = relationship("AggregationMember", back_populates="lot")
+    # Offers where this lot is the subject (lot_id FK)
+    offers = relationship("Offer", foreign_keys="Offer.lot_id", back_populates="lot")
 
     __table_args__ = (
         Index("idx_lot_farmer", "farmer_id"),
@@ -596,9 +598,9 @@ class Offer(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
     # Relationships
-    lot = relationship("FarmerLot")
+    lot = relationship("FarmerLot", foreign_keys=[lot_id], back_populates="offers")
+    buyer_user = relationship("User", back_populates="offers_made", foreign_keys=[buyer_id])
     buyer_user = relationship("User", back_populates="offers_made", foreign_keys=[buyer_id])
     buyer_requirement = relationship("BuyerRequirement")
     parent_offer = relationship("Offer", remote_side=[id])
