@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI, userAPI } from '../lib/api';
 
+type UserRole = 'farmer' | 'buyer';
+
 interface AuthUser {
   id: string;
   email: string;
+  role: UserRole;
 }
 
 interface AuthContextType {
