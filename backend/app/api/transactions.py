@@ -1,7 +1,7 @@
 """Offers, transactions, and payment status (no real payments)."""
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -23,6 +23,11 @@ from app.repository import (
 from app.schemas import OfferCreate, TokenData
 
 router = APIRouter()
+
+
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC datetime. Replaces deprecated datetime.utcnow()."""
+    return datetime.now(timezone.utc)
 
 ALLOWED_TRANSITIONS = {
     "accepted": "pickup_scheduled",
@@ -162,7 +167,7 @@ def _create_transaction_from_offer(db: Session, offer: Offer, actor_id: UUID) ->
         "expires_at": offer.expires_at.isoformat() if offer.expires_at else None,
     }
     offer.status = "accepted"
-    offer.accepted_at = datetime.utcnow()
+    offer.accepted_at = _utcnow()
     offer.accepted_terms_snapshot = json.dumps(snapshot)
     db.commit()
 
@@ -221,7 +226,7 @@ def create_offer(
         quality_terms=body.quality_terms,
         transport_responsibility=body.transport_responsibility,
         status="pending",
-        expires_at=datetime.utcnow() + timedelta(hours=body.expires_in_hours),
+        expires_at=_utcnow() + timedelta(hours=body.expires_in_hours),
     )
     FarmerLotRepository.update(db, lot.id, status="offered")
     return _serialize_offer(offer)
@@ -263,7 +268,7 @@ def offer_from_opportunity(
         quality_terms=lot.quality_grade,
         transport_responsibility="BUYER" if opp.applied_recovery and json.loads(opp.applied_recovery).get("assume_buyer_pickup") else "FARMER",
         status="pending",
-        expires_at=datetime.utcnow() + timedelta(hours=48),
+        expires_at=_utcnow() + timedelta(hours=48),
     )
     FarmerLotRepository.update(db, lot.id, status="offered")
     return _serialize_offer(offer)
@@ -285,7 +290,7 @@ def accept_offer(
     if offer.status == "accepted":
         txn = TransactionRepository.get_by_offer(db, offer.id)
         return _serialize_txn(txn)
-    if offer.expires_at and offer.expires_at < datetime.utcnow():
+    if offer.expires_at and offer.expires_at.replace(tzinfo=timezone.utc) < _utcnow():
         OfferRepository.update(db, offer.id, status="expired")
         raise HTTPException(status_code=400, detail="Offer has expired")
     txn = _create_transaction_from_offer(db, offer, user_id)
@@ -382,7 +387,7 @@ def report_payment(
         db,
         txn.id,
         payment_status="buyer_reported_paid",
-        buyer_reported_paid_at=datetime.utcnow(),
+        buyer_reported_paid_at=_utcnow(),
         buyer_payment_reference=body.payment_reference,
     )
     TransactionRepository.update(db, txn.id, payment_status="buyer_reported_paid")
@@ -416,7 +421,7 @@ def confirm_payment(
     PaymentRepository.update(
         db, txn.id,
         payment_status="payment_confirmed",
-        farmer_confirmed_at=datetime.utcnow(),
+        farmer_confirmed_at=_utcnow(),
     )
     TransactionRepository.update(
         db, txn.id,

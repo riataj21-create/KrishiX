@@ -53,16 +53,47 @@ export interface FarmerLot {
   status: string;
 }
 
+export interface OpportunityGap {
+  constraint_type: string;
+  required: unknown;
+  available: unknown;
+  gap: unknown;
+  gap_unit: string;
+  explanation: string;
+  severity?: string;
+}
+
+export interface MinimumViableChange {
+  change_type: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+  feasible: boolean;
+  reason: string;
+  resulting_feasibility?: string;
+}
+
+export interface Economics {
+  sale_value: number;
+  transport: number;
+  transport_source: string;
+  market_charges: number;
+  loading_handling: number;
+  estimated_net: number;
+  estimated_net_per_quintal: number;
+  labels?: Record<string, string>;
+}
+
 export interface Opportunity {
   id: string;
   lot_id: string;
   opportunity_type: string;
   feasibility_decision: 'EXECUTABLE' | 'RECOVERABLE' | 'NOT_VIABLE' | 'INSUFFICIENT_DATA' | string;
   blocking_constraints: string[];
-  opportunity_gaps: Array<{ explanation?: string; constraint?: string; [key: string]: unknown }>;
-  minimum_viable_changes: Array<{ description?: string; feasible?: boolean; [key: string]: unknown }>;
+  opportunity_gaps: OpportunityGap[];
+  minimum_viable_changes: MinimumViableChange[];
   offered_price?: number | null;
   estimated_net_realization?: number | null;
+  economics?: Economics | null;
   source_type: string;
   data_quality?: string | null;
   rank?: number | null;
@@ -71,6 +102,38 @@ export interface Opportunity {
   title?: string | null;
   warnings?: string[];
   price_kind?: string;
+  payment_days?: number | null;
+  required_grade?: string | null;
+  minimum_quantity?: number | null;
+  pickup_available?: boolean;
+  applied_recovery?: Record<string, unknown> | null;
+  aggregation?: {
+    can_aggregate: boolean;
+    needed_kg: number;
+    combined_kg: number;
+    members: Array<{ quantity_kg: number; district: string; label: string; participant_type: string }>;
+    reason: string;
+  } | null;
+}
+
+export interface AnalyzeResponse {
+  lot_id: string;
+  items: Opportunity[];
+  recommendation: string;
+  data_caveat: string;
+  opportunity_gap?: {
+    highest_quoted_per_kg: number;
+    best_executable_per_kg: number;
+    gap_per_kg: number;
+    label: string;
+  } | null;
+  summary?: {
+    total: number;
+    executable: number;
+    recoverable: number;
+    not_viable: number;
+    insufficient_data: number;
+  };
 }
 
 export interface Buyer {
@@ -270,15 +333,26 @@ export const lotAPI = {
   createLot: (data: Omit<FarmerLot, "id" | "status" | "commodity_name" | "quantity_kg">) =>
     makeRequest<FarmerLot>("/api/lots", { method: "POST", body: data }),
   getOpportunities: (lotId: string) =>
-    makeRequest<{ lot_id: string; items: Opportunity[]; recommendation?: string; data_caveat?: string }>(
-      `/api/lots/${lotId}/opportunities`,
-    ),
+    makeRequest<AnalyzeResponse>(`/api/lots/${lotId}/opportunities`),
   analyzeOpportunities: (lotId: string, farmerPriority = "maximize_realization") =>
-    makeRequest<{ lot_id: string; items: Opportunity[]; recommendation: string; data_caveat: string }>(
+    makeRequest<AnalyzeResponse>(
       `/api/lots/${lotId}/opportunities/analyze?farmer_priority=${encodeURIComponent(farmerPriority)}`,
       { method: "POST" },
     ),
   getOpportunity: (opportunityId: string) => makeRequest<Opportunity>(`/api/opportunities/${opportunityId}`),
+  applyRecovery: (opportunityId: string, changeTypes: string[]) =>
+    makeRequest<Opportunity>(`/api/opportunities/${opportunityId}/recovery`, {
+      method: "POST",
+      body: { change_types: changeTypes },
+    }),
+  whatif: (lotId: string, params: {
+    extra_quantity_kg?: number;
+    negotiated_payment_days?: number;
+    negotiated_price_per_kg?: number;
+    assume_buyer_pickup?: boolean;
+    transport_cost_override?: number;
+  }) =>
+    makeRequest<AnalyzeResponse>(`/api/lots/${lotId}/whatif`, { method: "POST", body: params }),
   offerFromOpportunity: (opportunityId: string) =>
     makeRequest<{ id: string; status: string }>(`/api/opportunities/${opportunityId}/offer`, { method: "POST" }),
 };
@@ -288,8 +362,10 @@ export const transactionAPI = {
   listTransactions: () => makeRequest<{ items: Transaction[]; disclaimer?: string }>("/api/transactions"),
   getTransaction: (transactionId: string) => makeRequest<Transaction>(`/api/transactions/${transactionId}`),
   advance: (transactionId: string) => makeRequest<Transaction>(`/api/transactions/${transactionId}/advance`, { method: "POST" }),
-  reportPayment: (transactionId: string, payment_reference?: string) =>
-    makeRequest<Transaction>(`/api/transactions/${transactionId}/payment/report`, { method: "POST", body: { payment_reference } }),
+  reportPayment: (transactionId: string, payment_reference?: string, demo_as_buyer = true) =>
+    makeRequest<Transaction>(`/api/transactions/${transactionId}/payment/report`, {
+      method: "POST", body: { payment_reference, demo_as_buyer },
+    }),
   confirmPayment: (transactionId: string, confirmed: boolean, notes?: string) =>
     makeRequest<Transaction>(`/api/transactions/${transactionId}/payment/confirm`, { method: "POST", body: { confirmed, notes } }),
 };

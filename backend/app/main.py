@@ -1,13 +1,39 @@
 """FastAPI application initialization."""
+import logging
 import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base, get_db
 import app.models  # noqa: F401 — registers all models with Base.metadata
 
-# Create all tables (idempotent; Alembic handles schema changes)
+logger = logging.getLogger("krishix.startup")
+
+# Create all tables (idempotent — uses IF NOT EXISTS)
 Base.metadata.create_all(bind=engine)
+
+# Auto-seed demo data on first start (only if no buyers exist)
+def _auto_seed():
+    """Seed demo data if the database is empty. Idempotent."""
+    try:
+        from sqlalchemy.orm import Session
+        from app.models import Buyer
+        from app.services.demo_seed import seed_demo
+        db: Session = next(get_db())
+        try:
+            count = db.query(Buyer).count()
+            if count == 0:
+                result = seed_demo(db)
+                logger.info("Demo data seeded automatically: %s", result)
+            else:
+                logger.info("Demo data already present (%d buyers), skipping auto-seed.", count)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("Auto-seed failed (non-fatal): %s", exc)
+
+_auto_seed()
 
 app = FastAPI(
     title="KrishiX API",
