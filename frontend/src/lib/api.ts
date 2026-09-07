@@ -135,6 +135,25 @@ export interface Transaction {
   disclaimer?: string;
 }
 
+export interface WhatIfResult {
+  lot_id: string;
+  whatif_applied: {
+    extra_quantity_kg?: number | null;
+    negotiated_payment_days?: number | null;
+    negotiated_price_per_kg?: number | null;
+    assume_buyer_pickup?: boolean | null;
+    transport_cost_override?: number | null;
+  };
+  items: Opportunity[];
+  summary: {
+    total: number;
+    executable: number;
+    recoverable: number;
+    not_viable: number;
+  };
+  note: string;
+}
+
 async function makeRequest<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -279,6 +298,22 @@ export const lotAPI = {
       { method: "POST" },
     ),
   getOpportunity: (opportunityId: string) => makeRequest<Opportunity>(`/api/opportunities/${opportunityId}`),
+  applyRecovery: (opportunityId: string, changeTypes: string[]) =>
+    makeRequest<Opportunity>(`/api/opportunities/${opportunityId}/recovery`, {
+      method: "POST",
+      body: { change_types: changeTypes },
+    }),
+  whatIf: (lotId: string, body: {
+    extra_quantity_kg?: number;
+    negotiated_payment_days?: number;
+    negotiated_price_per_kg?: number;
+    assume_buyer_pickup?: boolean;
+    transport_cost_override?: number;
+  }) =>
+    makeRequest<WhatIfResult>(`/api/lots/${lotId}/whatif`, {
+      method: "POST",
+      body,
+    }),
   offerFromOpportunity: (opportunityId: string) =>
     makeRequest<{ id: string; status: string }>(`/api/opportunities/${opportunityId}/offer`, { method: "POST" }),
 };
@@ -288,10 +323,32 @@ export const transactionAPI = {
   listTransactions: () => makeRequest<{ items: Transaction[]; disclaimer?: string }>("/api/transactions"),
   getTransaction: (transactionId: string) => makeRequest<Transaction>(`/api/transactions/${transactionId}`),
   advance: (transactionId: string) => makeRequest<Transaction>(`/api/transactions/${transactionId}/advance`, { method: "POST" }),
-  reportPayment: (transactionId: string, payment_reference?: string) =>
-    makeRequest<Transaction>(`/api/transactions/${transactionId}/payment/report`, { method: "POST", body: { payment_reference } }),
+  reportPayment: (transactionId: string, payment_reference?: string, demo_as_buyer = false) =>
+    makeRequest<Transaction>(`/api/transactions/${transactionId}/payment/report`, { method: "POST", body: { payment_reference, demo_as_buyer } }),
   confirmPayment: (transactionId: string, confirmed: boolean, notes?: string) =>
     makeRequest<Transaction>(`/api/transactions/${transactionId}/payment/confirm`, { method: "POST", body: { confirmed, notes } }),
+};
+
+export const demoAPI = {
+  listScenarios: () =>
+    makeRequest<Array<{
+      id: string;
+      name: string;
+      description: string;
+      demonstrates: string;
+      default_parameters: Record<string, unknown>;
+    }>>("/api/demo/scenarios"),
+  runScenario: (scenarioId: string, parameters?: Record<string, unknown>) =>
+    makeRequest<{
+      scenario_id: string;
+      scenario_name: string;
+      base_result: Opportunity;
+      after_recovery?: Opportunity | null;
+      parameters: Record<string, unknown>;
+    }>(`/api/demo/scenarios/${scenarioId}/run`, {
+      method: "POST",
+      body: parameters || {},
+    }),
 };
 
 // ── Buyers ──────────────────────────────────────────────────────────────────
