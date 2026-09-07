@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -31,12 +31,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTimeout(() => remove(id), 4000);
   }, [remove]);
 
-  const value: ToastContextType = {
+  const value = useMemo<ToastContextType>(() => ({
     success: (msg) => add('success', msg),
     error: (msg) => add('error', msg),
     warning: (msg) => add('warning', msg),
     info: (msg) => add('info', msg),
-  };
+  }), [add]);
 
   const icons: Record<ToastType, React.ReactNode> = {
     success: <CheckCircle2 className="w-5 h-5 text-[var(--success)] shrink-0" />,
