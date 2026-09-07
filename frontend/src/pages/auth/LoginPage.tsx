@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--background)] px-4">
-      <div className="w-full max-w-md card">
+      <div className="glass-panel w-full max-w-md">
         <div className="card-body">
           <h1 className="text-h3 mb-1 text-center">Sign in to KrishiX</h1>
           <p className="text-sm text-[var(--text-secondary)] text-center mb-6">Market intelligence for smarter agricultural decisions</p>

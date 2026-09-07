@@ -417,6 +417,32 @@ class OpportunityService:
                 "applied_recovery": self._overlay_dict(overlay) if overlay else None,
             })
             out.append(payload)
+        if not out:
+            commodity_name = lot.commodity.name if lot.commodity else "this crop"
+            out.append({
+                "feasibility_decision": "INSUFFICIENT_DATA",
+                "blocking_constraints": ["No verified market price is available for this crop in the selected markets."],
+                "opportunity_gaps": [],
+                "minimum_viable_changes": [],
+                "explanation": (
+                    f"KrishiX accepted {commodity_name}, but cannot calculate a sale price yet because "
+                    "the backend has no observed mandi or buyer price for it. Add an approved market-price "
+                    "source before treating any estimate as a real opportunity."
+                ),
+                "confidence_score": 0.0,
+                "warnings": ["No verified price data; no price was invented."],
+                "opportunity_type": "MARKET",
+                "buyer_requirement_id": None,
+                "market_id": None,
+                "title": f"No verified price data for {commodity_name}",
+                "offered_price": None,
+                "estimated_net_realization": None,
+                "source_type": "insufficient_data",
+                "data_quality": "INSUFFICIENT_DATA",
+                "price_kind": "market_price",
+                "price_note": "No verified market price is available for this crop.",
+                "applied_recovery": self._overlay_dict(overlay) if overlay else None,
+            })
         return out
 
     def _market_reanalyze(self, opp: Opportunity, lot, farmer_data, overlay):

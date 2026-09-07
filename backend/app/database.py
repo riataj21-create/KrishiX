@@ -1,10 +1,12 @@
 """Database configuration."""
 import os
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool, StaticPool
 
 Base = declarative_base()
+load_dotenv()
 
 
 def _make_engine():

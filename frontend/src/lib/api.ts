@@ -226,6 +226,8 @@ export const commodityAPI = {
     p.append("offset", String(offset));
     return makeRequest<{ total: number; items: Commodity[] }>(`/api/commodities?${p}`);
   },
+  createCommodity: (payload: { name: string; category?: string; unit: string; description?: string }) =>
+    makeRequest<Commodity>("/api/commodities", { method: "POST", body: payload }),
   getCommodity: (id: string) => makeRequest<Commodity>(`/api/commodities/${id}`),
 };
 

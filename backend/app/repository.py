@@ -71,6 +71,7 @@ class FarmerProfileRepository:
 
 class CommodityRepository:
     """Commodity database operations."""
+    model = Commodity
 
     @staticmethod
     def create(db: Session, **kwargs) -> Commodity:

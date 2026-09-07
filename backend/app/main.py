@@ -3,11 +3,14 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import engine, Base, get_db
+from app.database import engine, Base, SessionLocal
 import app.models  # noqa: F401 — registers all models with Base.metadata
+from app.services.catalog_seed import seed_catalog
 
 # Create all tables (idempotent; Alembic handles schema changes)
 Base.metadata.create_all(bind=engine)
+with SessionLocal() as startup_db:
+    seed_catalog(startup_db)
 
 app = FastAPI(
     title="KrishiX API",

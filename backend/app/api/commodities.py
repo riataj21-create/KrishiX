@@ -4,10 +4,28 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.database import get_db
-from app.schemas import CommodityResponse, PaginatedResponse
+from app.schemas import CommodityCreate, CommodityResponse, PaginatedResponse
 from app.repository import CommodityRepository
 
 router = APIRouter()
+
+
+@router.post("/commodities", response_model=CommodityResponse, status_code=status.HTTP_201_CREATED)
+def create_commodity(payload: CommodityCreate, db: Session = Depends(get_db)):
+    """Create a farmer-entered commodity when it is not in the suggested catalog."""
+    name = payload.name.strip()
+    existing = db.query(CommodityRepository.model).filter(
+        CommodityRepository.model.name.ilike(name)
+    ).first()
+    if existing:
+        return existing
+    return CommodityRepository.create(
+        db,
+        name=name,
+        category=payload.category or "Other",
+        unit=payload.unit,
+        description=payload.description or f"Farmer-entered commodity: {name}",
+    )
 
 
 @router.get("/commodities", response_model=PaginatedResponse)

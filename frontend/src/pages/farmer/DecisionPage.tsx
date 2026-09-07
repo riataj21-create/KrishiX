@@ -18,6 +18,7 @@ export default function DecisionPage() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [recommendation, setRecommendation] = useState('');
   const [dataCaveat, setDataCaveat] = useState('');
+  const [commodityName, setCommodityName] = useState('');
   const [form, setForm] = useState({
     commodity_id: '',
     quantity: '0.8',
@@ -38,7 +39,10 @@ export default function DecisionPage() {
     commodityAPI.listCommodities(undefined, 100)
       .then((result) => {
         setCommodities(result.items);
-        if (result.items[0]) setForm((current) => ({ ...current, commodity_id: result.items[0].id }));
+        if (result.items[0]) {
+          setForm((current) => ({ ...current, commodity_id: result.items[0].id }));
+          setCommodityName(result.items[0].name);
+        }
       })
       .catch((error: Error) => toast.error(error.message || 'Unable to load commodities'))
       .finally(() => setLoadingCommodities(false));
@@ -51,8 +55,25 @@ export default function DecisionPage() {
     setSubmitting(true);
     setOpportunities([]);
     try {
+      const enteredName = commodityName.trim();
+      if (!enteredName) {
+        toast.error('Enter a crop name before analyzing');
+        return;
+      }
+      let commodityId = commodities.find((commodity) => commodity.name.toLowerCase() === enteredName.toLowerCase())?.id;
+      if (!commodityId) {
+        const commodity = await commodityAPI.createCommodity({
+          name: enteredName,
+          category: 'Other',
+          unit: 'quintal',
+          description: `Farmer-entered crop: ${enteredName}`,
+        });
+        commodityId = commodity.id;
+        setCommodities((current) => current.some((item) => item.id === commodity.id) ? current : [...current, commodity]);
+        commodityId = commodity.id;
+      }
       const lot = await lotAPI.createLot({
-        commodity_id: form.commodity_id,
+        commodity_id: commodityId,
         quantity: Number(form.quantity),
         unit: 'quintal',
         state: form.state,
@@ -93,17 +114,16 @@ export default function DecisionPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <section className="rounded-3xl border border-white/10 bg-[#101827] p-6">
+          <section className="glass-panel p-6">
             <p className="text-xs uppercase tracking-[0.18em] text-violet-300">Farmer lot</p>
             <h1 className="mt-3 text-3xl font-semibold text-white">Find an executable sale</h1>
             <p className="mt-2 text-sm leading-6 text-slate-300">Enter the lot exactly as it exists. KrishiX will compare it with buyer requirements and market prices.</p>
 
             <form onSubmit={submit} className="mt-6 space-y-4">
-              <label className="block text-sm text-slate-300">Commodity
-                <select className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1020] px-3 py-3 text-white outline-none focus:border-violet-400" value={form.commodity_id} onChange={(event) => update('commodity_id', event.target.value)} required disabled={loadingCommodities || submitting}>
-                  {loadingCommodities && <option>Loading commodities...</option>}
-                  {commodities.map((commodity) => <option key={commodity.id} value={commodity.id}>{commodity.name}</option>)}
-                </select>
+              <label className="block text-sm text-slate-300">Crop or commodity
+                <input list="commodity-suggestions" className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1020] px-3 py-3 text-white outline-none focus:border-violet-400" placeholder={loadingCommodities ? 'Loading suggestions...' : 'Enter any crop, e.g. Cotton or Soybean'} value={commodityName} onChange={(event) => setCommodityName(event.target.value)} required disabled={loadingCommodities || submitting} />
+                <datalist id="commodity-suggestions">{commodities.map((commodity) => <option key={commodity.id} value={commodity.name}>{commodity.category}</option>)}</datalist>
+                <span className="mt-2 block text-xs text-slate-400">Suggestions are optional. Any crop name can be analyzed.</span>
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -142,7 +162,7 @@ export default function DecisionPage() {
                 </label>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 backdrop-blur-md">
                 <p className="mb-3 flex items-center gap-2 text-sm font-medium text-white"><MapPinned className="h-4 w-4 text-cyan-300" /> Optional GPS location</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <input aria-label="Latitude" className="w-full rounded-xl border border-white/10 bg-[#0d1020] px-3 py-3 text-sm text-white outline-none focus:border-violet-400" placeholder="Latitude" value={form.latitude} onChange={(event) => update('latitude', event.target.value)} />
@@ -156,7 +176,7 @@ export default function DecisionPage() {
             </form>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-[#101827] p-6">
+          <section className="glass-panel p-6">
             <p className="text-xs uppercase tracking-[0.18em] text-violet-300">Decision engine</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">Feasibility results</h2>
             {!opportunities.length ? (
@@ -170,7 +190,7 @@ export default function DecisionPage() {
                 <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">{recommendation}</div>
                 <div className="mt-5 space-y-4">
                   {opportunities.map((opportunity) => (
-                    <article key={opportunity.id} className="rounded-2xl border border-white/10 bg-[#0d1020] p-5">
+                    <article key={opportunity.id} className="glass-panel p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-lg font-semibold text-white">{opportunity.title || opportunity.opportunity_type}</p>
