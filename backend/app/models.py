@@ -598,7 +598,7 @@ class Offer(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    lot = relationship("FarmerLot")
+    lot = relationship("FarmerLot", foreign_keys=[lot_id])
     buyer_user = relationship("User", back_populates="offers_made", foreign_keys=[buyer_id])
     buyer_requirement = relationship("BuyerRequirement")
     parent_offer = relationship("Offer", remote_side=[id])
@@ -788,4 +788,3 @@ class Review(Base):
 # ============================================================================
 # Keep existing Buyer model above this line
 # ============================================================================
-
