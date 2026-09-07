@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Bell, BriefcaseBusiness, Leaf, MapPinned, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
+import { lotAPI, type FarmerLot } from '../../lib/api';
+import { useToast } from '../../context/ToastContext';
 
 const metrics = [
   { label: 'Market readiness', value: '74%', detail: '+12% vs last week', tone: 'emerald' },
@@ -16,6 +18,15 @@ const actions = [
 ];
 
 export default function DashboardPage() {
+  const toast = useToast();
+  const [lot, setLot] = useState<FarmerLot | null>(null);
+
+  useEffect(() => {
+    lotAPI.listLots()
+      .then((result) => setLot(result.items[0] || null))
+      .catch((error: Error) => toast.error(error.message || 'Unable to load your lots'));
+  }, [toast]);
+
   return (
     <div className="min-h-screen bg-[#080b14] text-slate-100">
       <div className="mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
@@ -46,23 +57,23 @@ export default function DashboardPage() {
                 <p className="text-xs uppercase tracking-[0.18em] text-violet-300">Opportunity overview</p>
                 <h2 className="mt-2 text-3xl font-semibold text-white">Can this lot sell today?</h2>
               </div>
-              <div className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">Executable</div>
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300">{lot ? lot.status : 'No lot yet'}</div>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Commodity</p>
-                <p className="mt-3 text-xl font-semibold text-white">Tomato</p>
-                <p className="mt-1 text-sm text-slate-300">Grade B · 80 kg</p>
+                <p className="mt-3 text-xl font-semibold text-white">{lot?.commodity_name || 'Create a lot'}</p>
+                <p className="mt-1 text-sm text-slate-300">{lot ? `${lot.quality_grade || 'Grade not set'} · ${lot.quantity_kg || lot.quantity * 100} kg` : 'Add produce to evaluate a sale'}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Best realization</p>
-                <p className="mt-3 text-xl font-semibold text-white">₹28,740</p>
-                <p className="mt-1 text-sm text-slate-300">Net after transport</p>
+                <p className="mt-3 text-xl font-semibold text-white">—</p>
+                <p className="mt-1 text-sm text-slate-300">Run an analysis to calculate</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-slate-400">Payment window</p>
-                <p className="mt-3 text-xl font-semibold text-white">2 days</p>
-                <p className="mt-1 text-sm text-slate-300">Fits farmer requirement</p>
+                <p className="mt-3 text-xl font-semibold text-white">{lot ? `${lot.max_payment_days} days` : '—'}</p>
+                <p className="mt-1 text-sm text-slate-300">{lot ? 'Farmer requirement' : 'Not configured'}</p>
               </div>
             </div>
           </div>
@@ -74,12 +85,12 @@ export default function DashboardPage() {
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-white">Sell now with FPO backup</p>
-                <p className="text-sm text-slate-400">Highest net price and safe payment terms</p>
+                <p className="text-lg font-semibold text-white">{lot ? 'Analyze this lot' : 'Start with your lot'}</p>
+                <p className="text-sm text-slate-400">{lot ? 'Compare executable buyer and market options' : 'KrishiX needs your produce details first'}</p>
               </div>
             </div>
             <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-              The buyer requirement is feasible, but the strongest fallback remains the local FPO if a pickup delay occurs.
+              {lot ? 'Your saved lot is ready for a fresh feasibility analysis using current market and buyer data.' : 'Create your first lot to see constraints, recovery options, and the best executable fallback.'}
             </div>
           </div>
         </section>
